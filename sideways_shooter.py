@@ -87,6 +87,7 @@ class SidewaysShooter:
             if bullet.rect.right >= 1200:
                 self.bullets.remove(bullet)
 
+
     def _update_aliens(self):
         """Check if the fleet is at an edge, then update positions."""
         self._check_fleet_edges()
@@ -104,7 +105,7 @@ class SidewaysShooter:
         for alien in self.aliens.sprites():
             alien.rect.x -= self.settings.fleet_shift_left_speed
         self.settings.fleet_direction *= -1
-
+ 
     def _update_screen(self):
         """Update images on the screen, and flip to the new screen."""
         self.screen.fill(self.settings.bg_color)
