@@ -15,9 +15,11 @@ they're hit.
 """
 
 import sys, pygame
+from time import sleep
 from rocket import Rocket
 from bullet import Bullet
 from settings import Settings
+from game_stats import GameStats
 from alien import Alien
 
 class SidewaysShooter:
@@ -34,23 +36,50 @@ class SidewaysShooter:
         self.settings.screen_height = self.screen.get_rect().height
         pygame.display.set_caption("Sideways Shooter")
 
+        # create an instance to store game statistics
+        self.stats = GameStats(self)
+
         self.rocket = Rocket(self)
         self.bullets = pygame.sprite.Group()
         self.aliens = pygame.sprite.Group()
 
         self._create_fleet()
+
+        # start Sideways Shooter in an active state.
+        self.game_active = True
     
     def run_game(self):
         """Start the main loop for the game."""
         while True:
-            print(self.settings.fleet_direction)
             self._check_events()
-            self.rocket.update()
-            self._update_bullets()
-            self._update_aliens()
+
+            if self.game_active:
+                self.rocket.update()
+                self._update_bullets()
+                self._update_aliens()
+
             self._update_screen()
             self.clock.tick(60)
-            
+    
+    def _rocket_hit(self):
+        """Respond to the rocket being hit by an alien."""
+        if self.stats.rockets_left > 0:
+            # decrement rockets left
+            self.stats.rockets_left -= 1
+
+            # get rid of any remaining bullets and aliens.
+            self.bullets.empty()
+            self.aliens.empty()
+
+            # create a new fleet and center the ship.
+            self._create_fleet()
+            self.rocket.center_rocket()
+
+            # pause
+            sleep(0.5)
+        else:
+            self.game_active = False
+
     def _create_fleet(self):
         """Create the fleet of aliens."""
         # create an alien and keep adding aliens until there's no room left.
@@ -84,14 +113,32 @@ class SidewaysShooter:
         self.bullets.update()
         # get rid of bullets that have disappeared.
         for bullet in self.bullets.copy():
-            if bullet.rect.right >= 1200:
+            if bullet.rect.right >= self.settings.screen_width:
                 self.bullets.remove(bullet)
 
+        self._check_bullet_alien_collisions()
+
+    def _check_bullet_alien_collisions(self):
+        """Respond to any bullets and aliens that have collided."""
+        # remove any bullets and aliens that have collided.
+        collisions = pygame.sprite.groupcollide(self.bullets, self.aliens, True, True)
+
+        if not self.aliens:
+            # destroy existing bullets and create new fleet.
+            self.bullets.empty()
+            self._create_fleet()
 
     def _update_aliens(self):
         """Check if the fleet is at an edge, then update positions."""
         self._check_fleet_edges()
         self.aliens.update()
+
+        # look for alien-ship collisions.
+        if pygame.sprite.spritecollideany(self.rocket, self.aliens):
+            self._rocket_hit()
+        
+        # look for aliens hitting the left of the screen.
+        self._check_aliens_left()
 
     def _check_fleet_edges(self):
         """Respond appropriately if any aliens have reached an edge."""
@@ -150,6 +197,14 @@ class SidewaysShooter:
         if len(self.bullets) < self.settings.bullets_allowed:
             new_bullet = Bullet(self)
             self.bullets.add(new_bullet)
+    
+    def _check_aliens_left(self):
+        """Check if any aliens have reached the left of the screen."""
+        for alien in self.aliens.sprites():
+            if alien.rect.left <= 0:
+                # treat this the same as if the rocket got hit.
+                self._rocket_hit()
+                break
 
 if __name__ == '__main__':
     # make a game instance, and run the game.
