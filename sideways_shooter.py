@@ -12,6 +12,17 @@ them move sideways toward the ship. Or, write code that places aliens at
 random positions along the right side of the screen and then sends them
 toward the ship. Also, write code that makes the aliens disappear when 
 they're hit.
+
+13-6. Game Over: In Sideways Shooter, keep track of the number of times
+the ship is hit and the number of times an alien is hit by the ship.
+Decide on an appropriate condition for ending the game, and stop the game
+when this situation occurs. 
+
+14-8. Sideways Shooter, Final Version: Continue developing Sideways Shooter,
+using everything we've done in this project. Add a Play button, make the game
+speed up at appropriate points, and develop a scoring system. Be sure to 
+refactor your code as you work, and look for opportunities to customize
+the game beyond what has been shown in this chapter. 
 """
 
 import sys, pygame
@@ -20,6 +31,8 @@ from rocket import Rocket
 from bullet import Bullet
 from settings import Settings
 from game_stats import GameStats
+from scoreboard import Scoreboard
+from button import Button
 from alien import Alien
 
 class SidewaysShooter:
@@ -37,7 +50,9 @@ class SidewaysShooter:
         pygame.display.set_caption("Sideways Shooter")
 
         # create an instance to store game statistics
+        # and a scoreboard
         self.stats = GameStats(self)
+        self.sb = Scoreboard(self)
 
         self.rocket = Rocket(self)
         self.bullets = pygame.sprite.Group()
@@ -45,8 +60,11 @@ class SidewaysShooter:
 
         self._create_fleet()
 
-        # start Sideways Shooter in an active state.
-        self.game_active = True
+        # start Sideways Shooter in an inactive state.
+        self.game_active = False
+
+        # make the play button
+        self.play_button = Button(self, "Play")
     
     def run_game(self):
         """Start the main loop for the game."""
@@ -64,8 +82,9 @@ class SidewaysShooter:
     def _rocket_hit(self):
         """Respond to the rocket being hit by an alien."""
         if self.stats.rockets_left > 0:
-            # decrement rockets left
+            # decrement rockets left and update scoreboard
             self.stats.rockets_left -= 1
+            self.sb.prep_rockets()
 
             # get rid of any remaining bullets and aliens.
             self.bullets.empty()
@@ -79,6 +98,7 @@ class SidewaysShooter:
             sleep(0.5)
         else:
             self.game_active = False
+            pygame.mouse.set_visible(True)
 
     def _create_fleet(self):
         """Create the fleet of aliens."""
@@ -89,7 +109,6 @@ class SidewaysShooter:
 
         current_y, current_x = alien_height, (self.settings.screen_width - 2 * alien_width)
         while current_x > (3 * alien_width):
-            print(current_x)
             while current_y < (self.settings.screen_height - alien_height):
                 self._create_alien(current_y, current_x)
                 current_y += 2 * alien_height
@@ -123,10 +142,22 @@ class SidewaysShooter:
         # remove any bullets and aliens that have collided.
         collisions = pygame.sprite.groupcollide(self.bullets, self.aliens, True, True)
 
+        if collisions:
+            for aliens in collisions.values():
+                self.stats.score += self.settings.alien_points * len(aliens)
+            self.stats.score += self.settings.alien_points
+            self.sb.prep_score()
+            self.sb.check_high_score()
+
         if not self.aliens:
             # destroy existing bullets and create new fleet.
             self.bullets.empty()
             self._create_fleet()
+            self.settings.increase_speed()
+
+            # increase level
+            self.stats.level += 1
+            self.sb.prep_level()
 
     def _update_aliens(self):
         """Check if the fleet is at an edge, then update positions."""
@@ -159,6 +190,13 @@ class SidewaysShooter:
         self.rocket.blitme()
         self.aliens.draw(self.screen)
 
+        # draw the score information
+        self.sb.show_score()
+
+        # draw the play button if the game is inactive.
+        if not self.game_active:
+            self.play_button.draw_button()
+
         for bullet in self.bullets.sprites():
                 bullet.draw_bullet()
 
@@ -173,6 +211,33 @@ class SidewaysShooter:
                 self._check_keydown_events(event)
             elif event.type == pygame.KEYUP:
                 self._check_keyup_events(event)
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_pos = pygame.mouse.get_pos()
+                self._check_play_button(mouse_pos)
+
+    def _check_play_button(self, mouse_pos):
+        """Start a new game when the player clicks Play."""
+        button_clicked = self.play_button.rect.collidepoint(mouse_pos)
+        if self.play_button.rect.collidepoint(mouse_pos) and not self.game_active:
+            # reset the game settings.
+            self.settings.initialize_dynamic_settings()
+            # reset the game statistics.
+            self.stats.reset_stats()
+            self.sb.prep_score()
+            self.sb.prep_level()
+            self.sb.prep_rockets()
+            self.game_active = True
+
+            # get rid of any remaining bullets and aliens.
+            self.bullets.empty()
+            self.aliens.empty()
+
+            # create a new fleet and center the ship.
+            self._create_fleet()
+            self.rocket.center_rocket()
+
+            # hide the mouse cursor
+            pygame.mouse.set_visible(False)
 
     def _check_keydown_events(self, event):
         """Respond to keypresses."""
